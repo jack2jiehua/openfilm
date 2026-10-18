@@ -133,14 +133,36 @@ export function toolContent(result) {
       : []));
 }
 
-/** How a run ended, as ACP says it, from Pi's last answer; an error is thrown (the chat shows it). */
+/**
+ * How a run ended, as ACP says it, from Pi's last answer; an error is thrown (the chat shows it), in plain words
+ * (`failureText`), with Pi's own words as its `details`.
+ */
 export function stopReason(message) {
   switch (message?.stopReason) {
     case 'length': return 'max_tokens';
     case 'aborted': return 'cancelled';
-    case 'error': throw new Error(String(message.errorMessage || 'The model did not answer.'));
+    case 'error': {
+      const said = String(message.errorMessage || 'The model did not answer.');
+      throw Object.assign(new Error(failureText(said)), { details: said });
+    }
     default: return 'end_turn';
   }
+}
+
+/* what the model service's client says when no answer came in time (Pi waits 5 minutes, then tries again twice) */
+const TIMED_OUT = /request timed out|headers timeout|body timeout/i;
+/* a conversation longer than the model takes: as Pi says it, then as services commonly do */
+const PI_OVERFLOW = /^context overflow recovery failed/i;
+const OVERFLOW = /context (?:length|window|size)|prompt (?:is )?too long/i;
+const CONTEXT_HINT = "The model's context may be smaller than set in Settings: lower it there.";
+
+/** Why a turn failed, in plain words where Pi's own are technical; anything else as Pi said it. */
+export function failureText(said) {
+  const text = String(said ?? '').trim();
+  if (TIMED_OUT.test(text)) return "The model service didn't answer for 5 minutes, even after retries. Check that the service is running and reachable, then try again.";
+  if (PI_OVERFLOW.test(text)) return `${text} ${CONTEXT_HINT}`;
+  if (OVERFLOW.test(text)) return `The conversation is too long for the model. ${CONTEXT_HINT}`;
+  return text;
 }
 
 /** How full the context is after an answer (ACP usage_update): what the conversation takes, of the model's window. */

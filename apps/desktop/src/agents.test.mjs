@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLIENT_CAPABILITIES, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, legacyOptions, powerShellScript, readAgentStatus, signInError, codexTooOld } from './agents.mjs';
+import { CLIENT_CAPABILITIES, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, errorCause, legacyOptions, powerShellScript, readAgentStatus, signInError, codexTooOld } from './agents.mjs';
 
 test('an agent that asks: yes for good where it offers that, else yes this once; nothing to say yes with is null', () => {
   const options = [
@@ -55,6 +55,22 @@ test('an error the agent sends as "Internal error" carries its reason; a sign-in
   const plain = new Error('Codex process has exited with code 1');
   assert.equal(signInError('Codex', plain), plain);
   assert.equal(signInError('Codex', Object.assign(new Error('Authentication required'), { code: -32000 })).code, 'sign-in');
+});
+
+test('a turn the agent ends with just "Internal error" says the reason in its data; the error as sent stays its cause', () => {
+  /* the ACP SDK's own shape for a thrown Error: its text as data.details */
+  const sent = Object.assign(new Error('Internal error'), { code: -32603, data: { details: 'Request timed out.' } });
+  const e = errorCause(sent);
+  assert.equal(e.message, 'Request timed out.');
+  assert.equal(e.cause, sent);
+  assert.equal(errorCause(Object.assign(new Error('Internal error'), { code: -32603, data: 'model not found' })).message, 'model not found');
+  /* an error that says its reason itself, or has none in data, as it came */
+  const said = Object.assign(new Error('The model service did not answer.'), { code: -32603, data: { details: 'Request timed out.' } });
+  assert.equal(errorCause(said), said);
+  const bare = Object.assign(new Error('Internal error'), { code: -32603, data: { errorKind: 'transport_lost' } });
+  assert.equal(errorCause(bare), bare);
+  const other = Object.assign(new Error('Invalid params'), { code: -32602, data: { message: 'x' } });
+  assert.equal(errorCause(other), other);
 });
 
 test("the person's own developer_instructions in Codex's config, read as TOML writes them; a profile's is not theirs at the top", () => {

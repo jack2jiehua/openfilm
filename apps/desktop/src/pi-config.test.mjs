@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { THINKING, contextLength, contextUsed, effortOption, modelEffort, modelOption, modelsJson, outOfBalance, providerOf, stopReason, toolCall, toolContent } from './pi-config.mjs';
+import { THINKING, contextLength, contextUsed, effortOption, failureText, modelEffort, modelOption, modelsJson, outOfBalance, providerOf, stopReason, toolCall, toolContent } from './pi-config.mjs';
 
 /** One of the person's own models, as the roster's harness gives it. */
 const own = (id, over = {}) => ({ id, name: id.toUpperCase(), api: 'openai-completions', baseUrl: `https://${id}.test/v1`, keyEnv: `K_${id}`, model: `${id}-model`, levels: ['auto'], effort: 'auto', ...over });
@@ -52,6 +52,8 @@ test('what Pi does reads in the chat as Codex\'s did: a command\'s kind and titl
   assert.equal(stopReason({ stopReason: 'toolUse' }), 'end_turn');
   assert.equal(stopReason({ stopReason: 'aborted' }), 'cancelled');
   assert.throws(() => stopReason({ stopReason: 'error', errorMessage: '400 bad' }), /400 bad/);
+  assert.throws(() => stopReason({ stopReason: 'error', errorMessage: 'Request timed out.' }),
+    (e) => e.message.startsWith("The model service didn't answer for 5 minutes") && e.details === 'Request timed out.');
   assert.deepEqual(contextUsed({ usage: { input: 100, cacheRead: 900, cacheWrite: 0, output: 50 } }, { contextWindow: 10_000 }), { used: 1050, size: 10_000 });
 });
 
@@ -92,4 +94,19 @@ test('the effort option: for a model offering more than one, its levels named', 
   assert.equal(effortOption(['auto'], 'auto'), null);
   assert.deepEqual(effortOption(['auto', 'xhigh'], 'xhigh'), { id: 'effort', name: 'Effort', category: 'thought_level', type: 'select', currentValue: 'xhigh',
     options: [{ value: 'auto', name: 'Auto' }, { value: 'xhigh', name: 'Extra high' }] });
+});
+
+test('why a turn failed, in plain words: a service that sent nothing in time, a conversation too long for the model; else as Pi said it', () => {
+  const timedOut = "The model service didn't answer for 5 minutes, even after retries. Check that the service is running and reachable, then try again.";
+  assert.equal(failureText('Request timed out.'), timedOut, "the OpenAI and Anthropic clients' own timeout");
+  assert.equal(failureText('Headers Timeout Error'), timedOut);
+  assert.equal(failureText('Body Timeout Error'), timedOut);
+  const hint = "The model's context may be smaller than set in Settings: lower it there.";
+  const pi = 'Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model.';
+  assert.equal(failureText(pi), `${pi} ${hint}`);
+  assert.equal(failureText('Context overflow recovery failed: 400 prompt is too long'), `Context overflow recovery failed: 400 prompt is too long ${hint}`);
+  assert.equal(failureText("400: This model's maximum context length is 65536 tokens. However, you requested 70000 tokens."), `The conversation is too long for the model. ${hint}`);
+  assert.equal(failureText('prompt is too long: 213462 tokens > 200000 maximum'), `The conversation is too long for the model. ${hint}`);
+  assert.equal(failureText('401 Incorrect API key provided'), '401 Incorrect API key provided');
+  assert.equal(failureText('terminated'), 'terminated', 'a connection cut off is not said to be a timeout');
 });

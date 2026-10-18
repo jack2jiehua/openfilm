@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { AgentSession } from './agents.mjs';
 
 /** A service on the Chat Completions API that answers "ok" and notes the model each request named (and each request, and its key). */
-async function service({ broke = false } = {}) {
+async function service({ broke = false, fails = null } = {}) {
   const asked = [];
   const bodies = [];
   const keys = [];
@@ -20,6 +20,7 @@ async function service({ broke = false } = {}) {
       bodies.push(JSON.parse(body || '{}'));
       keys.push(String(req.headers.authorization ?? ''));
       if (broke) { res.writeHead(402, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: 'Insufficient Balance' } })); return; }
+      if (fails) { res.writeHead(400, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: fails } })); return; }
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const chunk = (choice, extra = {}) => `data: ${JSON.stringify({ id: 'c', object: 'chat.completion.chunk', created: 0, model, choices: [choice], ...extra })}\n\n`;
       res.end(chunk({ index: 0, delta: { role: 'assistant', content: 'ok' }, finish_reason: null })
@@ -133,5 +134,41 @@ test('a service with no balance left is named for the model the turn was on, not
     session.close();
     first.close();
     second.close();
+  }
+});
+
+test('a turn that fails says why, as the service said it, not "Internal error"', { timeout: 60_000 }, async () => {
+  const svc = await service({ fails: 'The model `big` does not exist.' });
+  const session = new AgentSession({
+    agent: 'byok',
+    cwd: mkdtempSync(join(tmpdir(), 'of-pi-')),
+    harness: { home: mkdtempSync(join(tmpdir(), 'of-pi-home-')), models: [own('a', svc.url)], model: 'a', env: { OPENFILM_BYOK_KEY_a: 'sk' } },
+  });
+  try {
+    await session.start();
+    const error = await session.prompt([{ type: 'text', text: 'hi' }]).then(() => null, (e) => e);
+    assert.match(error?.message ?? '', /The model `big` does not exist\./);
+    assert.equal(error.code, -32603);
+  } finally {
+    session.close();
+    svc.close();
+  }
+});
+
+test('a conversation too long for the model says so, and where its context is set', { timeout: 60_000 }, async () => {
+  const svc = await service({ fails: "This model's maximum context length is 1000 tokens. However, you requested about 2000 tokens." });
+  const session = new AgentSession({
+    agent: 'byok',
+    cwd: mkdtempSync(join(tmpdir(), 'of-pi-')),
+    harness: { home: mkdtempSync(join(tmpdir(), 'of-pi-home-')), models: [own('a', svc.url)], model: 'a', env: { OPENFILM_BYOK_KEY_a: 'sk' } },
+  });
+  try {
+    await session.start();
+    const error = await session.prompt([{ type: 'text', text: 'hi' }]).then(() => null, (e) => e);
+    assert.equal(error?.message, "The conversation is too long for the model. The model's context may be smaller than set in Settings: lower it there.");
+    assert.match(error.data?.details ?? '', /maximum context length is 1000 tokens/, 'what the service said goes too');
+  } finally {
+    session.close();
+    svc.close();
   }
 });

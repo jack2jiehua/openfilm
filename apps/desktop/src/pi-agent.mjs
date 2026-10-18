@@ -137,7 +137,7 @@ async function open(client, cwd, resumeId) {
   const now = ownOf(session.model);
   const onModel = now.id ?? startModel;
   const levels = byId.get(onModel)?.levels ?? ['auto'];
-  const entry = { session, log: null, model: onModel,
+  const entry = { session, log: null, answer: null, overflow: null, model: onModel,
     effort: now.thinking && levels.includes(session.thinkingLevel) ? session.thinkingLevel : !now.thinking && levels.includes('auto') ? 'auto' : byId.get(onModel)?.effort ?? 'auto' };
   /* a conversation taken up again on a model no longer set up: on the one a session starts on */
   if (!now.id) await use(entry, onModel, entry.effort);
@@ -155,6 +155,8 @@ async function open(client, cwd, resumeId) {
       case 'message_end': {
         const message = event.message;
         if (message?.role !== 'assistant') break;
+        /* the turn's last answer: Pi drops one too long for the model from the conversation as it tries to recover */
+        entry.answer = message;
         if (pending && entry.log) {
           const toolsNow = (session.agent?.state?.tools ?? []).map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
           entry.log.write({ startedAt: pending.startedAt, messages: pending.messages, toolsNow, answer: { message, systemPrompt: session.systemPrompt } });
@@ -175,6 +177,10 @@ async function open(client, cwd, resumeId) {
       case 'tool_execution_end':
         send({ sessionUpdate: 'tool_call_update', toolCallId: event.toolCallId, status: event.isError ? 'failed' : 'completed',
           content: toolContent(event.result), rawOutput: event.result?.content?.filter?.((b) => b?.type === 'text').map((b) => b.text).join('\n') ?? '' });
+        break;
+      case 'compaction_end':
+        /* Pi could not make room for the conversation: the turn ends on that (its last answer may not say it) */
+        if (event.reason === 'overflow' && event.errorMessage) entry.overflow = event.errorMessage;
         break;
       default: break;
     }
@@ -254,6 +260,21 @@ function promptOf(blocks) {
   return { text: text.join('\n'), images };
 }
 
+/**
+ * A failure with its own text: the SDK sends a plain Error as "Internal error", its text only in `data`. Pi's own words,
+ * when the text is plainer (pi-config.mjs failureText), go as `details`.
+ */
+function failed(e) {
+  if (e instanceof acp.RequestError) return e;
+  const text = e instanceof Error ? e.message : String(e);
+  return new acp.RequestError(-32603, text, typeof e?.details === 'string' && e.details !== text ? { details: e.details } : undefined);
+}
+
+/** A request whose failure the chat shows as it is said. */
+const said = (handler) => async (params) => {
+  try { return await handler(params); } catch (e) { throw failed(e); }
+};
+
 const connection = new acp.AgentSideConnection((client) => ({
   async initialize() {
     return {
@@ -264,25 +285,27 @@ const connection = new acp.AgentSideConnection((client) => ({
     };
   },
   async authenticate() { return {}; },
-  async newSession(params) { return open(client, params.cwd, null); },
-  async resumeSession(params) { return open(client, params.cwd, params.sessionId); },
-  async prompt(params) {
+  newSession: said((params) => open(client, params.cwd, null)),
+  resumeSession: said((params) => open(client, params.cwd, params.sessionId)),
+  prompt: said(async (params) => {
     const entry = sessions.get(params.sessionId);
     if (!entry) throw new Error('This conversation has ended.');
     const { session } = entry;
     const meta = params._meta?.openfilm ?? {};
     entry.log = typeof meta.turnId === 'string' && typeof meta.cwd === 'string' ? modelLog(meta.cwd, meta.turnId) : null;
+    entry.answer = null;
+    entry.overflow = null;
     try {
       const { text, images } = promptOf(params.prompt);
       await session.prompt(text, images.length ? { images } : undefined);
-      const last = [...session.messages].reverse().find((m) => m.role === 'assistant');
-      return { stopReason: stopReason(last) };
+      const last = entry.answer ?? [...session.messages].reverse().find((m) => m.role === 'assistant');
+      return { stopReason: stopReason(entry.overflow && last?.stopReason !== 'aborted' ? { stopReason: 'error', errorMessage: entry.overflow } : last) };
     } finally {
       entry.log?.end();
       entry.log = null;
     }
-  },
-  async setSessionConfigOption(params) {
+  }),
+  setSessionConfigOption: said(async (params) => {
     const entry = sessions.get(params.sessionId);
     if (!entry) throw new Error('This conversation has ended.');
     if (params.configId === 'model') {
@@ -297,7 +320,7 @@ const connection = new acp.AgentSideConnection((client) => ({
       await use(entry, entry.model, effort);
     } else throw new Error(`No option ${params.configId}.`);
     return { configOptions: optionsOf(entry) };
-  },
+  }),
   async cancel(params) { await sessions.get(params.sessionId)?.session.abort(); },
   async closeSession(params) {
     sessions.get(params.sessionId)?.session.dispose();

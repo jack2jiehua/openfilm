@@ -25,9 +25,9 @@ The script fetches upstream, fast-forwards `main`, and merges `main` into `dev`:
 
 ```sh
 corepack pnpm sync:upstream           # local only
-corepack pnpm sync:upstream -- --push # also push main and dev to origin
-corepack pnpm sync:upstream -- --check
-corepack pnpm sync:upstream -- --no-merge
+corepack pnpm sync:upstream --push    # also push main and dev to origin
+corepack pnpm sync:upstream --check
+corepack pnpm sync:upstream --no-merge
 ```
 
 Without pnpm on the PATH, run it directly: `node scripts/sync-upstream.mjs [--push] [--check]`.
@@ -55,8 +55,8 @@ git reset --hard upstream/main
 git push --force-with-lease origin main
 ```
 
-Conflicts are resolved on `dev`, in the merge commit. Run `corepack pnpm typecheck` and `corepack pnpm test` before
-pushing the resolution. Do not rewrite `dev` once it is pushed: merges keep the history and make the next upstream sync
+Conflicts are resolved on `dev`, in the merge commit. Run `corepack pnpm -r --if-present typecheck` and
+`corepack pnpm -r --workspace-concurrency=1 --if-present test` before pushing the resolution. Do not rewrite `dev` once it is pushed: merges keep the history and make the next upstream sync
 predictable.
 
 ## Daily work
@@ -103,11 +103,11 @@ codebase and there is no plugin API for changing its UI at runtime.
 
 ```sh
 corepack pnpm install
-corepack pnpm dev          # Studio alone, in a browser, port 4848
-corepack pnpm dev:desktop  # the app from source, "OpenFilm Dev", port 4757
+corepack pnpm --filter openfilm dev             # Studio alone, in a browser, port 4848
+corepack pnpm --filter @openfilm/desktop start  # the app from source, "OpenFilm Dev", port 4757
 ```
 
-`dev:desktop` builds the window's page (`apps/desktop/shell`), then starts Electron. It is its own app: separate name,
+The second command builds the window's page (`apps/desktop/shell`), then starts Electron. It is its own app: separate name,
 data folder (`~/.openfilm-dev`), Studio home, port, and projects (`~/Movies/OpenFilm Dev/Projects`), so an installed
 OpenFilm is left alone. Restart it after changing Studio's UI or the desktop code.
 
@@ -170,5 +170,8 @@ The installed copy on this machine is 0.1.7; this repository is 0.2.0, so run fr
 - `apps/desktop/shell/vite.config.ts` compared Vite's forward-slash importer paths with Windows backslash paths, so
   the shell build failed at a random chat component. This fork normalizes both before the comparison; without it
   `dev:desktop` and `release` cannot build on Windows. It is a good upstream pull request.
-- Node 22.18+, pnpm 9.15.9 (`corepack pnpm` gives the version in `package.json`), git and ffmpeg are required. This
-  machine's standalone `pnpm` shim points at an nvm install with no active version; `corepack pnpm` avoids it.
+- Node 22.18+, pnpm 9.15.9 (`corepack pnpm` gives the version in `package.json`), git and ffmpeg are required.
+- This machine's bare `pnpm` shim points at an nvm install with no active Node, so `pnpm ...` and the root scripts
+  that shell out to `pnpm` (`dev`, `dev:desktop`, `build`, `test`, `typecheck`) fail. Use `corepack pnpm` and the
+  direct `--filter` commands above, or put a working pnpm first on the PATH. `corepack pnpm sync:upstream` works
+  because that script only runs Node and git.

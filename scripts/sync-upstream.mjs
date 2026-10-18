@@ -17,7 +17,9 @@ import { parseArgs } from 'node:util';
 const UPSTREAM = 'https://github.com/openfilm/openfilm.git';
 const DEFAULT_BRANCH = 'dev';
 
+const args = process.argv.slice(2).filter((arg) => arg !== '--');
 const { values: options } = parseArgs({
+  args,
   options: {
     push: { type: 'boolean', default: false },
     check: { type: 'boolean', default: false },
@@ -59,11 +61,6 @@ if (!/jack2jiehua\/openfilm(?:\.git)?$/i.test(origin)) {
   say(`origin is ${origin} (expected jack2jiehua/openfilm).`);
 }
 
-const dirty = output(['status', '--porcelain']);
-if (dirty) {
-  fail(`The working tree has changes; commit or stash them first:\n\n${dirty}`);
-}
-
 const start = output(['branch', '--show-current']);
 if (!start) fail('HEAD is detached; check out a branch first.');
 
@@ -82,6 +79,11 @@ if (options.check) {
   }
   say('\nNothing changed (--check).');
   process.exit(0);
+}
+
+const dirty = output(['status', '--porcelain']);
+if (dirty) {
+  fail(`The working tree has changes; commit or stash them first:\n\n${dirty}`);
 }
 
 if (ahead !== 0) {

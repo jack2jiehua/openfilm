@@ -56,8 +56,8 @@ git push --force-with-lease origin main
 ```
 
 Conflicts are resolved on `dev`, in the merge commit. Run `corepack pnpm -r --if-present typecheck` and
-`corepack pnpm -r --workspace-concurrency=1 --if-present test` before pushing the resolution. Do not rewrite `dev` once it is pushed: merges keep the history and make the next upstream sync
-predictable.
+`corepack pnpm -r --workspace-concurrency=1 --if-present test` before pushing the resolution. Do not rewrite `dev`
+once it is pushed: merges keep the history and make the next upstream sync predictable.
 
 ## Daily work
 
@@ -107,9 +107,9 @@ corepack pnpm --filter openfilm dev             # Studio alone, in a browser, po
 corepack pnpm --filter @openfilm/desktop start  # the app from source, "OpenFilm Dev", port 4757
 ```
 
-The second command builds the window's page (`apps/desktop/shell`), then starts Electron. It is its own app: separate name,
-data folder (`~/.openfilm-dev`), Studio home, port, and projects (`~/Movies/OpenFilm Dev/Projects`), so an installed
-OpenFilm is left alone. Restart it after changing Studio's UI or the desktop code.
+The second command builds the window's page (`apps/desktop/shell`), then starts Electron. It is its own app:
+separate name, data folder (`~/.openfilm-dev`), Studio home, port, and projects
+(`~/Movies/OpenFilm Dev/Projects`), so an installed OpenFilm is left alone. Restart it after changing Studio's UI or the desktop code.
 
 ### Build an installer
 
@@ -175,3 +175,5 @@ The installed copy on this machine is 0.1.7; this repository is 0.2.0, so run fr
   that shell out to `pnpm` (`dev`, `dev:desktop`, `build`, `test`, `typecheck`) fail. Use `corepack pnpm` and the
   direct `--filter` commands above, or put a working pnpm first on the PATH. `corepack pnpm sync:upstream` works
   because that script only runs Node and git.
+- If Electron's binary download stalls (its install script fetches from GitHub), retry through a mirror:
+  `$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"; corepack pnpm rebuild electron`.

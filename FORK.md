@@ -165,7 +165,26 @@ to extend it: the next update replaces them. To run custom features you either r
 
 The installed copy on this machine is 0.1.7; this repository is 0.2.0, so run from source to see the current code.
 
-### Windows notes
+## Private GPT pool provider
+
+`gptpool` is this fork's provider for the private GPT pool in `E:\CodeBuddy\工具\GPT号池生图`. It talks to that
+project's local gateway, not to FPBrowser2API or the browser windows directly:
+
+- Gateway: `openfilm_gateway.py`, bound to `127.0.0.1:8100`; `service.ps1 start` starts it with the pool.
+  Its key is generated into `_ops\openfilm_gateway.key`; paste that key into Studio's Settings → Providers → GPT Pool.
+- OpenFilm: provider id `gptpool`, key environment `GPTPOOL_API_KEY`, base URL `OPENFILM_GPTPOOL_URL` (default
+  `http://127.0.0.1:8100`).
+- Image models: `gpt-image2-1k`, `gpt-image2-2k`, `gpt-image2-4k`.
+- Video: one model, `pixverse`. The pool owns the settings in `openfilm_gateway.json` (today 540P / 5s / 图文);
+  the provider sends no duration or aspect ratio for video, so changing them is the pool's job. OpenFilm's spend
+  confirmation may still show its own default duration; that is not what the pool uses.
+- Tests: `node --test packages/openfilm/studio/server/providers/gptpool.test.mjs`; the gateway has
+  `_ops\test_openfilm_gateway.py`.
+
+The gateway is local-only on purpose. Do not expose port 8100, FPBrowser2API's 8000 or VirtualBrowser's 9000 to the
+network, and do not commit the key or the pool's credential files.
+
+## Windows notes
 
 - `apps/desktop/shell/vite.config.ts` compared Vite's forward-slash importer paths with Windows backslash paths, so
   the shell build failed at a random chat component. This fork normalizes both before the comparison; without it

@@ -174,6 +174,7 @@ The installed copy on this machine is 0.1.7; this repository is 0.2.0, so run fr
 - This machine's bare `pnpm` shim points at an nvm install with no active Node, so `pnpm ...` and the root scripts
   that shell out to `pnpm` (`dev`, `dev:desktop`, `build`, `test`, `typecheck`) fail. Use `corepack pnpm` and the
   direct `--filter` commands above, or put a working pnpm first on the PATH. `corepack pnpm sync:upstream` works
-  because that script only runs Node and git.
+  because that script only runs Node and git. `release.mjs` uses the pnpm that invoked it (`npm_execpath`), so the
+  release command above also works in this state.
 - If Electron's binary download stalls (its install script fetches from GitHub), retry through a mirror:
   `$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"; corepack pnpm rebuild electron`.

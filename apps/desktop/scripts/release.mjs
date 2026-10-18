@@ -75,6 +75,12 @@ const NOTARY_PROFILE = process.env.OPENFILM_NOTARY_PROFILE || 'openfilm-notary';
 
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: 'inherit', ...opts });
 const pkg = JSON.parse(readFileSync(join(desktop, 'package.json'), 'utf8'));
+/** The pnpm that runs this script when it is pnpm (a lifecycle script has npm_execpath); `pnpm` on the PATH otherwise. */
+const pnpm = (() => {
+  const execpath = process.env.npm_execpath ?? '';
+  if (!/pnpm/.test(execpath)) return ['pnpm'];
+  return /\.[cm]?js$/.test(execpath) ? [process.execPath, execpath] : [execpath];
+})();
 
 /* 1. the window's page, and Studio's editor for the package */
 const vite = join(dirname(require.resolve('vite/package.json')), 'bin', 'vite.js');
@@ -90,7 +96,7 @@ cpSync(join(desktop, 'shell/dist'), join(stage, 'shell/dist'), { recursive: true
 const pack = (dir) => execFileSync('npm', ['pack', '--ignore-scripts', '--pack-destination', work, '--silent'], { cwd: dir, encoding: 'utf8' }).trim().split('\n').pop();
 const dependencies = { ...pkg.dependencies, openfilm: `file:../${pack(protocol)}` };
 /* npm takes the versions pnpm's lockfile has (locked-versions.mjs): what the tests ran with, not the latest */
-const lockedTree = JSON.parse(execFileSync('pnpm', ['list', '--prod', '--depth', 'Infinity', '--json'], { cwd: desktop, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }))[0];
+const lockedTree = JSON.parse(execFileSync(pnpm[0], [...pnpm.slice(1), 'list', '--prod', '--depth', 'Infinity', '--json'], { cwd: desktop, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }))[0];
 writeFileSync(join(stage, 'package.json'), `${JSON.stringify({
   name: 'openfilm-desktop',
   productName: NAME,

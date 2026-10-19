@@ -165,6 +165,21 @@ to extend it: the next update replaces them. To run custom features you either r
 
 The installed copy on this machine is 0.1.7; this repository is 0.2.0, so run from source to see the current code.
 
+## DeepSeek
+
+`deepseek` is Studio's subtitle-translation provider (the `translate` verb): DeepSeek is a text model and makes no
+pictures, video or sound. It calls an OpenAI-compatible chat endpoint:
+
+- `DEEPSEEK_API_KEY` — the key.
+- `OPENFILM_DEEPSEEK_URL` — the endpoint root, `https://api.deepseek.com` by default. Point it at an
+  OpenAI-compatible gateway (one that serves `/chat/completions`) to use another DeepSeek access path.
+- Models: `deepseek-v4.1-flash`, `deepseek-v4-pro` (the WorkBuddy pool's names) and `deepseek-chat`,
+  `deepseek-reasoner` (DeepSeek's public API names). Pick the one the configured endpoint serves.
+
+The DSH WorkBuddy XD Pool is an in-process DSH model provider, not a stable HTTP service: its OpenAI-compatible shim
+listens on a random loopback port with an in-memory bearer token, so Studio cannot point at it directly without a local
+bridge. The provider's `OPENFILM_DEEPSEEK_URL` is that seam once such a bridge is running.
+
 ## Private GPT pool provider
 
 `gptpool` is this fork's provider for the private GPT pool in `E:\CodeBuddy\工具\GPT号池生图`. It talks to that

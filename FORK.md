@@ -167,18 +167,21 @@ The installed copy on this machine is 0.1.7; this repository is 0.2.0, so run fr
 
 ## DeepSeek
 
-`deepseek` is Studio's subtitle-translation provider (the `translate` verb): DeepSeek is a text model and makes no
-pictures, video or sound. It calls an OpenAI-compatible chat endpoint:
+`deepseek` serves Studio's subtitle translation (`translate`), web search (`web-search`) and page fetching
+(`web-fetch`). DeepSeek makes no pictures or sound, and its Search tool is web search only: it has no image search
+endpoint, so `image-search` stays with Pexels/Pixabay.
 
-- `DEEPSEEK_API_KEY` — the key.
-- `OPENFILM_DEEPSEEK_URL` — the endpoint root, `https://api.deepseek.com` by default. Point it at an
-  OpenAI-compatible gateway (one that serves `/chat/completions`) to use another DeepSeek access path.
-- Models: `deepseek-v4.1-flash`, `deepseek-v4-pro` (the WorkBuddy pool's names) and `deepseek-chat`,
-  `deepseek-reasoner` (DeepSeek's public API names). Pick the one the configured endpoint serves.
+- `DEEPSEEK_API_KEY` — a DeepSeek API key.
+- `OPENFILM_DEEPSEEK_URL` — the API root, `https://api.deepseek.com` by default.
+- Search/Fetch: `POST /v1/tools/search` and `POST /v1/tools/fetch`, as in
+  https://api-docs.deepseek.com/zh-cn/guides/search. They are billed per request by DeepSeek.
+- Translation models: `deepseek-v4.1-flash`, `deepseek-v4-pro` (the WorkBuddy pool's names) and `deepseek-chat`,
+  `deepseek-reasoner` (DeepSeek's public API names). Pick the one the endpoint serves.
 
 The DSH WorkBuddy XD Pool is an in-process DSH model provider, not a stable HTTP service: its OpenAI-compatible shim
-listens on a random loopback port with an in-memory bearer token, so Studio cannot point at it directly without a local
-bridge. The provider's `OPENFILM_DEEPSEEK_URL` is that seam once such a bridge is running.
+listens on a random loopback port with an in-memory bearer token, and it proxies WorkBuddy chat only. It does not carry
+a DeepSeek API key and has no `/v1/tools/search` or `/v1/tools/fetch`, so the free WorkBuddy pool cannot serve
+Studio's Search/Fetch jobs. Use a DeepSeek API key for those; the WorkBuddy pool remains a chat-model path.
 
 ## Private GPT pool provider
 
